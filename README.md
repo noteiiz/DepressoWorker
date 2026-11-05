@@ -6,6 +6,7 @@ A tiny Windows system-tray app that keeps your PC awake during the workday and s
 
 ## Features
 - **Keep awake** – taps Caps Lock twice every 5 minutes (state unchanged) and tells Windows not to sleep or turn off the display.
+- **Lock-screen aware** – when you lock the PC (Win+L), Caps Lock taps pause and the screen is allowed to turn off; the PC still stays awake so the shutdown happens on time. Taps resume after you unlock.
 - **Auto shutdown at 17:00** – a popup warns you 5 minutes before, with a countdown.
   - **Snooze +5 min** (as many times as you like)
   - **Shut down now**

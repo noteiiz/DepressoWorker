@@ -6,6 +6,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace CatTimer
 {
@@ -56,6 +57,7 @@ namespace CatTimer
         DateTime baseTarget;     // target before snoozes
         int snoozeCount;
         DateTime nextKeepAwake;
+        bool locked;             // Win+L: pause Caps Lock taps and let the screen turn off
         bool warned;
         bool shuttingDown;
         AlertForm alert;
@@ -66,7 +68,8 @@ namespace CatTimer
         {
             SetTarget(DefaultTarget);
             nextKeepAwake = DateTime.Now.Add(KeepAwakeEvery);
-            SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+            ApplyAwakeState();
+            SystemEvents.SessionSwitch += OnSessionSwitch;
 
             ContextMenuStrip menu = new ContextMenuStrip();
             miTarget = new ToolStripMenuItem();
@@ -121,7 +124,7 @@ namespace CatTimer
             DateTime now = DateTime.Now;
 
             // 1. Keep awake: tap Caps Lock twice (state ends up unchanged).
-            if (now >= nextKeepAwake)
+            if (!locked && now >= nextKeepAwake)
             {
                 TapCapsLock();
                 TapCapsLock();
@@ -206,7 +209,7 @@ namespace CatTimer
         void UpdateTooltip()
         {
             TimeSpan left = Target - DateTime.Now;
-            string s = "CatTimer - shutdown " + Target.ToString("HH:mm") + " (in " + FormatSpan(left) + ")";
+            string s = (locked ? "[Locked] " : "") + "CatTimer - shutdown " + Target.ToString("HH:mm") + " (in " + FormatSpan(left) + ")";
             if (s.Length > 63) s = s.Substring(0, 63); // NotifyIcon limit
             tray.Text = s;
         }
@@ -239,8 +242,30 @@ namespace CatTimer
             }
         }
 
+        // While locked: no Caps Lock taps and the display may turn off,
+        // but the PC is still kept from sleeping so the shutdown can happen on time.
+        void ApplyAwakeState()
+        {
+            if (locked) SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED);
+            else SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+        }
+
+        void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+        {
+            if (e.Reason == SessionSwitchReason.SessionLock || e.Reason == SessionSwitchReason.ConsoleDisconnect)
+                locked = true;
+            else if (e.Reason == SessionSwitchReason.SessionUnlock || e.Reason == SessionSwitchReason.ConsoleConnect)
+            {
+                locked = false;
+                nextKeepAwake = DateTime.Now.Add(KeepAwakeEvery);
+            }
+            else return;
+            ApplyAwakeState();
+        }
+
         void ExitApp()
         {
+            SystemEvents.SessionSwitch -= OnSessionSwitch;
             tick.Stop();
             CloseAlert();
             SetThreadExecutionState(ES_CONTINUOUS);
